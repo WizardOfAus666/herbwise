@@ -1,0 +1,34 @@
+# Gradle & Build Outputs
+.gradle/
+build/
+target/
+out/
+
+# Compiled Binaries & Archives (Forbidden in RuneLite Plugin Hub repos)
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+
+# Local Developer Helper Scripts
+build.ps1
+run-herbwise.ps1
+run-herbwise.bat
+run-preview.ps1
+run-preview.bat
+
+# IDE & OS Files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.DS_Store
+Thumbs.db
