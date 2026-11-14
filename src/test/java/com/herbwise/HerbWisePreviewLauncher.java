@@ -9,6 +9,7 @@ import com.herbwise.services.WikiRecipeService;
 import com.herbwise.ui.HerbWiseTheme;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.util.concurrent.Executors;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
@@ -55,6 +56,7 @@ public class HerbWisePreviewLauncher
 				null,
 				null
 			);
+			dataService.setExecutorService(Executors.newSingleThreadScheduledExecutor());
 			dataService.startUp();
 
 			HerbWisePanel panel = new HerbWisePanel(dataService);

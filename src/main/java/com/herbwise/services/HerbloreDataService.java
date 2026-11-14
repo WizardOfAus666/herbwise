@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -160,8 +159,10 @@ public class HerbloreDataService
 	private final List<Runnable> uiUpdateListeners = new CopyOnWriteArrayList<>();
 	private final AtomicBoolean refreshRunning = new AtomicBoolean(false);
 
+	@Inject
 	private ScheduledExecutorService executorService;
 	private ScheduledFuture<?> scheduledRefreshFuture;
+	private ScheduledFuture<?> scheduledRetryFuture;
 
 	// Runtime settings synchronized from HerbWiseConfig and editable in Settings panel
 	private volatile int refreshIntervalSeconds = 60;
@@ -289,25 +290,22 @@ public class HerbloreDataService
 		notifyUiListeners();
 	}
 
+	public void setExecutorService(ScheduledExecutorService executorService)
+	{
+		this.executorService = executorService;
+	}
+
 	/**
 	 * Starts background price updates and triggers an initial asynchronous fetch.
 	 */
 	public synchronized void startUp()
 	{
-		if (executorService == null || executorService.isShutdown())
-		{
-			executorService = Executors.newSingleThreadScheduledExecutor(r -> {
-				Thread t = new Thread(r, "HerbWise-PriceUpdater");
-				t.setDaemon(true);
-				return t;
-			});
-		}
 		rescheduleBackgroundUpdates();
 		refreshPricesAsync();
 	}
 
 	/**
-	 * Cleanly shuts down all scheduled tasks and background executors when the plugin stops.
+	 * Cleanly cancels scheduled tasks when the plugin stops.
 	 */
 	public synchronized void shutDown()
 	{
@@ -316,10 +314,10 @@ public class HerbloreDataService
 			scheduledRefreshFuture.cancel(false);
 			scheduledRefreshFuture = null;
 		}
-		if (executorService != null)
+		if (scheduledRetryFuture != null)
 		{
-			executorService.shutdownNow();
-			executorService = null;
+			scheduledRetryFuture.cancel(false);
+			scheduledRetryFuture = null;
 		}
 		refreshRunning.set(false);
 	}
@@ -344,19 +342,13 @@ public class HerbloreDataService
 	}
 
 	/**
-	 * Triggers a non-blocking manual or scheduled price refresh on the background worker thread.
+	 * Triggers a non-blocking manual or scheduled price refresh on the background executor.
 	 */
 	public void refreshPricesAsync()
 	{
 		if (executorService != null && !executorService.isShutdown())
 		{
 			executorService.submit(this::refreshPricesNowSafe);
-		}
-		else
-		{
-			Thread t = new Thread(this::refreshPricesNowSafe, "HerbWise-ManualRefresh");
-			t.setDaemon(true);
-			t.start();
 		}
 	}
 
@@ -647,12 +639,6 @@ public class HerbloreDataService
 		if (executorService != null && !executorService.isShutdown())
 		{
 			executorService.submit(task);
-		}
-		else
-		{
-			Thread t = new Thread(task, "HerbWise-TimeseriesFetch");
-			t.setDaemon(true);
-			t.start();
 		}
 	}
 

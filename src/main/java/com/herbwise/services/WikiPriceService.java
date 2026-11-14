@@ -49,9 +49,6 @@ public class WikiPriceService
 	public static final String V1_BASE_URL = "https://prices.runescape.wiki/api/v1/osrs";
 	public static final String USER_AGENT = "HerbWise-RuneLite-Plugin/1.0.0 (+https://github.com/WizardOfAus666/herbwise; OSRS Herblore Profit & Training Assistant)";
 
-	private static final int MAX_RETRIES = 2;
-	private static final long INITIAL_BACKOFF_MS = 350L;
-
 	private final OkHttpClient httpClient;
 	private final Gson gson;
 	private final PriceCacheService priceCacheService;
@@ -639,53 +636,23 @@ public class WikiPriceService
 
 	String executeWithRetry(String fullUrl) throws IOException
 	{
-		IOException lastException = null;
-		long backoffMs = INITIAL_BACKOFF_MS;
+		Request request = new Request.Builder()
+			.url(fullUrl)
+			.header("User-Agent", USER_AGENT)
+			.header("Accept", "application/json")
+			.get()
+			.build();
 
-		for (int attempt = 0; attempt <= MAX_RETRIES; attempt++)
+		try (Response response = httpClient.newCall(request).execute())
 		{
-			if (attempt > 0)
+			int code = response.code();
+			if (response.isSuccessful() && response.body() != null)
 			{
-				try
-				{
-					Thread.sleep(backoffMs);
-				}
-				catch (InterruptedException ie)
-				{
-					Thread.currentThread().interrupt();
-					throw new IOException("Interrupted during API retry backoff", ie);
-				}
-				backoffMs *= 2L;
+				ResponseBody body = response.body();
+				return body.string();
 			}
-
-			Request request = new Request.Builder()
-				.url(fullUrl)
-				.header("User-Agent", USER_AGENT)
-				.header("Accept", "application/json")
-				.get()
-				.build();
-
-			try (Response response = httpClient.newCall(request).execute())
-			{
-				int code = response.code();
-				if (response.isSuccessful() && response.body() != null)
-				{
-					ResponseBody body = response.body();
-					return body.string();
-				}
-				lastException = new IOException("HTTP " + code + " from " + fullUrl);
-				// Do not retry 404 Not Found on the same URL
-				if (code == 404)
-				{
-					break;
-				}
-			}
-			catch (IOException ex)
-			{
-				lastException = ex;
-			}
+			throw new IOException("HTTP " + code + " from " + fullUrl);
 		}
-		throw lastException != null ? lastException : new IOException("Failed to fetch " + fullUrl);
 	}
 
 	private JsonObject extractDataObject(String json, String endpointName) throws IOException
