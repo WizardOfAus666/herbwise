@@ -1,5 +1,6 @@
 package com.herbwise;
 
+import com.google.gson.Gson;
 import com.herbwise.services.HerbloreDataService;
 import com.herbwise.services.PlayerSkillService;
 import com.herbwise.services.PriceCacheService;
@@ -11,6 +12,7 @@ import java.awt.Dimension;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
+import okhttp3.OkHttpClient;
 
 /**
  * Standalone Swing preview launcher for inspecting the HerbWise sidebar UI outside a full RuneLite session.
@@ -34,7 +36,7 @@ public class HerbWisePreviewLauncher
 
 		SwingUtilities.invokeLater(() -> {
 			PriceCacheService cacheService = new PriceCacheService();
-			WikiPriceService priceService = new WikiPriceService();
+			WikiPriceService priceService = new WikiPriceService(new OkHttpClient(), new Gson(), cacheService);
 			WikiRecipeService recipeService = new WikiRecipeService();
 			PlayerSkillService skillService = new PlayerSkillService();
 

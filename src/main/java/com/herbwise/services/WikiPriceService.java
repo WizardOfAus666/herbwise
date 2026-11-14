@@ -66,14 +66,9 @@ public class WikiPriceService
 	@Inject
 	public WikiPriceService(OkHttpClient httpClient, Gson gson, PriceCacheService priceCacheService)
 	{
-		this.httpClient = httpClient != null ? httpClient : new OkHttpClient();
-		this.gson = gson != null ? gson : new Gson();
+		this.httpClient = httpClient;
+		this.gson = gson;
 		this.priceCacheService = priceCacheService != null ? priceCacheService : new PriceCacheService();
-	}
-
-	public WikiPriceService()
-	{
-		this(new OkHttpClient(), new Gson(), new PriceCacheService());
 	}
 
 	public void setPrimaryBaseUrl(String primaryBaseUrl)

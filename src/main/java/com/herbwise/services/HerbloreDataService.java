@@ -198,7 +198,7 @@ public class HerbloreDataService
 		ItemManager itemManager,
 		Notifier notifier)
 	{
-		this.wikiPriceService = wikiPriceService != null ? wikiPriceService : new WikiPriceService();
+		this.wikiPriceService = wikiPriceService;
 		this.wikiRecipeService = wikiRecipeService != null ? wikiRecipeService : new WikiRecipeService();
 		this.priceCacheService = priceCacheService != null ? priceCacheService : new PriceCacheService();
 		this.playerSkillService = playerSkillService != null ? playerSkillService : new PlayerSkillService();
