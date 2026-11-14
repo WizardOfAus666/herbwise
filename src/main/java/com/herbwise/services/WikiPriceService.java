@@ -53,8 +53,6 @@ public class WikiPriceService
 	private final Gson gson;
 	private final PriceCacheService priceCacheService;
 
-	private volatile String primaryBaseUrl = V2_BASE_URL;
-	private volatile String fallbackBaseUrl = V1_BASE_URL;
 	private volatile String activeBaseUrl = V2_BASE_URL;
 	private volatile boolean connected = false;
 	private volatile String connectionStatusMessage = "Initialising OSRS Wiki API...";
@@ -66,19 +64,6 @@ public class WikiPriceService
 		this.httpClient = httpClient;
 		this.gson = gson;
 		this.priceCacheService = priceCacheService != null ? priceCacheService : new PriceCacheService();
-	}
-
-	public void setPrimaryBaseUrl(String primaryBaseUrl)
-	{
-		if (primaryBaseUrl != null && !primaryBaseUrl.trim().isEmpty())
-		{
-			this.primaryBaseUrl = primaryBaseUrl.trim();
-		}
-	}
-
-	public void setFallbackBaseUrl(String fallbackBaseUrl)
-	{
-		this.fallbackBaseUrl = fallbackBaseUrl;
 	}
 
 	public String getActiveBaseUrl()
@@ -618,19 +603,15 @@ public class WikiPriceService
 	{
 		try
 		{
-			String response = executeWithRetry(primaryBaseUrl + endpointPath);
-			activeBaseUrl = primaryBaseUrl;
+			String response = executeWithRetry(V2_BASE_URL + endpointPath);
+			activeBaseUrl = V2_BASE_URL;
 			return response;
 		}
 		catch (IOException primaryEx)
 		{
-			if (fallbackBaseUrl != null && !fallbackBaseUrl.isEmpty() && !fallbackBaseUrl.equals(primaryBaseUrl))
-			{
-				String response = executeWithRetry(fallbackBaseUrl + endpointPath);
-				activeBaseUrl = fallbackBaseUrl;
-				return response;
-			}
-			throw primaryEx;
+			String response = executeWithRetry(V1_BASE_URL + endpointPath);
+			activeBaseUrl = V1_BASE_URL;
+			return response;
 		}
 	}
 
