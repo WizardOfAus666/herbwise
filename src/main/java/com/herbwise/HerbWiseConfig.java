@@ -87,13 +87,13 @@ public interface HerbWiseConfig extends Config
 	@ConfigItem(
 		keyName = "priceRefreshIntervalSeconds",
 		name = "Price refresh interval (s)",
-		description = "Background refresh interval in seconds for fetching OSRS Wiki prices (30 to 3600s).",
+		description = "Background refresh interval in seconds for fetching OSRS Wiki prices (30 to 3600s, default 120s).",
 		section = SECTION_PRICES,
 		position = 1
 	)
 	default int priceRefreshIntervalSeconds()
 	{
-		return 60;
+		return 120;
 	}
 
 	@ConfigItem(

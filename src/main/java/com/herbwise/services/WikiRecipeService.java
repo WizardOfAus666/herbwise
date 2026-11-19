@@ -6,7 +6,9 @@ import com.herbwise.models.PotionIngredient;
 import com.herbwise.models.PotionRecipe;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import javax.inject.Singleton;
 
 /**
@@ -39,12 +41,14 @@ public class WikiRecipeService
 
 	private final List<PotionRecipe> verifiedRecipes;
 	private final List<ValidationResult> validationReport;
+	private final Set<Integer> requiredUniqueItemIds;
 
 	public WikiRecipeService()
 	{
 		List<PotionRecipe> raw = HerbloreRecipes.getAllRecipes();
 		List<PotionRecipe> validList = new ArrayList<>(raw.size());
 		List<ValidationResult> reportList = new ArrayList<>(raw.size());
+		Set<Integer> uniqueIds = new LinkedHashSet<>();
 
 		for (PotionRecipe recipe : raw)
 		{
@@ -53,11 +57,20 @@ public class WikiRecipeService
 			if (res.isValid())
 			{
 				validList.add(recipe);
+				uniqueIds.add(recipe.getPotionItemId());
+				for (PotionIngredient ing : recipe.getIngredients())
+				{
+					if (ing != null && ing.getItemId() > 0 && ing.isTradeable())
+					{
+						uniqueIds.add(ing.getItemId());
+					}
+				}
 			}
 		}
 
 		this.verifiedRecipes = Collections.unmodifiableList(validList);
 		this.validationReport = Collections.unmodifiableList(reportList);
+		this.requiredUniqueItemIds = Collections.unmodifiableSet(uniqueIds);
 	}
 
 	/**
@@ -179,5 +192,13 @@ public class WikiRecipeService
 	public List<ValidationResult> getValidationReport()
 	{
 		return validationReport;
+	}
+
+	/**
+	 * Returns the deduplicated set of all tradeable item IDs required across all verified Herblore recipes.
+	 */
+	public Set<Integer> getRequiredUniqueItemIds()
+	{
+		return requiredUniqueItemIds;
 	}
 }

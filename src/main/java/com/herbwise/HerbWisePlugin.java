@@ -113,6 +113,10 @@ public class HerbWisePlugin extends Plugin
 	@Subscribe
 	public void onStatChanged(StatChanged event)
 	{
+		if (event != null && event.getSkill() != net.runelite.api.Skill.HERBLORE)
+		{
+			return;
+		}
 		if (playerSkillService != null)
 		{
 			playerSkillService.refreshFromClient();
@@ -137,12 +141,7 @@ public class HerbWisePlugin extends Plugin
 		}
 		if (dataService != null)
 		{
-			dataService.syncSettingsFromConfig();
-			dataService.recalculateAll(java.time.Instant.now().getEpochSecond());
-			if (panel != null)
-			{
-				SwingUtilities.invokeLater(panel::refreshAllTabs);
-			}
+			dataService.onExternalConfigChanged();
 		}
 	}
 

@@ -68,12 +68,19 @@ public class HerbloreDataService
 	private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss")
 		.withZone(ZoneId.systemDefault());
 
+	public static final long MIN_MANUAL_REFRESH_COOLDOWN_SEC = 15L;
+
 	public enum ConnectionState
 	{
-		LIVE("LIVE API", new Color(0x22, 0xC5, 0x5E)),
+		CONNECTED("CONNECTED", new Color(0x22, 0xC5, 0x5E)),
+		LIVE("CONNECTED", new Color(0x22, 0xC5, 0x5E)),
+		CACHED_DATA("CACHED DATA", new Color(0xF5, 0x9E, 0x0B)),
 		CACHED_FALLBACK("CACHED DATA", new Color(0xF5, 0x9E, 0x0B)),
-		REFRESHING("REFRESHING...", new Color(0x38, 0xBD, 0xF8)),
-		ERROR("API OFFLINE", new Color(0xEF, 0x44, 0x44));
+		UPDATING("UPDATING", new Color(0x38, 0xBD, 0xF8)),
+		REFRESHING("UPDATING", new Color(0x38, 0xBD, 0xF8)),
+		RATE_LIMITED("RATE LIMITED", new Color(0xF9, 0x73, 0x16)),
+		OFFLINE("OFFLINE", new Color(0xEF, 0x44, 0x44)),
+		ERROR("OFFLINE", new Color(0xEF, 0x44, 0x44));
 
 		private final String badgeText;
 		private final Color badgeColor;
@@ -158,6 +165,7 @@ public class HerbloreDataService
 
 	private final List<Runnable> uiUpdateListeners = new CopyOnWriteArrayList<>();
 	private final AtomicBoolean refreshRunning = new AtomicBoolean(false);
+	private final AtomicBoolean pluginRunning = new AtomicBoolean(false);
 
 	@Inject
 	private ScheduledExecutorService executorService;
@@ -165,7 +173,7 @@ public class HerbloreDataService
 	private ScheduledFuture<?> scheduledRetryFuture;
 
 	// Runtime settings synchronized from HerbWiseConfig and editable in Settings panel
-	private volatile int refreshIntervalSeconds = 60;
+	private volatile int refreshIntervalSeconds = 120;
 	private volatile PriceCalculationMode priceCalculationMode = PriceCalculationMode.INSTANT_CONSERVATIVE;
 	private volatile boolean showProfitableOnly = false;
 	private volatile boolean showAvailableAtLevelOnly = false;
@@ -179,9 +187,10 @@ public class HerbloreDataService
 	private volatile HerbloreBoostMode herbloreBoostMode = HerbloreBoostMode.NONE;
 	private volatile boolean enableNotifications = false;
 
-	private volatile ConnectionState connectionState = ConnectionState.CACHED_FALLBACK;
+	private volatile ConnectionState connectionState = ConnectionState.CACHED_DATA;
 	private volatile long lastUpdatedEpochSec = 0L;
-	private volatile String statusDetailText = "Ready";
+	private volatile long lastManualRefreshEpochSec = 0L;
+	private volatile String statusDetailText = "Ready (Cached Data)";
 
 	@Inject
 	public HerbloreDataService(
@@ -215,16 +224,34 @@ public class HerbloreDataService
 
 		syncSettingsFromConfig();
 
-		// Prime immediately with cached fallback so UI is never blank before first network response completes
+		// Prime immediately with previously cached live prices (if warm across restart) or bundled fallback
 		Map<Integer, ItemPrice> initialCache = this.priceCacheService.getOrLoadFallbackPrices();
 		this.activePrices.putAll(initialCache);
-		this.lastUpdatedEpochSec = PriceCacheService.BUNDLED_SNAPSHOT_EPOCH_SEC;
-		recalculateAll(Instant.now().getEpochSecond());
+		if (!this.priceCacheService.isUsingFallbackSnapshot() && this.priceCacheService.getLastLiveSaveEpochSec() > 0L)
+		{
+			this.lastUpdatedEpochSec = this.priceCacheService.getLastLiveSaveEpochSec();
+			this.connectionState = ConnectionState.CACHED_DATA;
+			this.statusDetailText = "Loaded " + initialCache.size() + " warm cached prices from previous session";
+		}
+		else
+		{
+			this.lastUpdatedEpochSec = PriceCacheService.BUNDLED_SNAPSHOT_EPOCH_SEC;
+			this.connectionState = ConnectionState.CACHED_DATA;
+			this.statusDetailText = "Loaded verified offline price snapshot";
+		}
+		recalculateAll(currentEpochSeconds());
 
 		this.playerSkillService.addListener(skillData -> {
-			recalculateAll(Instant.now().getEpochSecond());
+			recalculateAll(currentEpochSeconds());
 			notifyUiListeners();
 		});
+	}
+
+	private long currentEpochSeconds()
+	{
+		return wikiPriceService != null
+			? wikiPriceService.currentEpochSeconds()
+			: Instant.now().getEpochSecond();
 	}
 
 	public synchronized void syncSettingsFromConfig()
@@ -234,6 +261,10 @@ public class HerbloreDataService
 			return;
 		}
 		this.refreshIntervalSeconds = Math.max(30, config.priceRefreshIntervalSeconds());
+		if (this.priceCacheService != null)
+		{
+			this.priceCacheService.setLatestTtlSeconds(this.refreshIntervalSeconds);
+		}
 		this.priceCalculationMode = config.priceCalculationMode() != null
 			? config.priceCalculationMode()
 			: PriceCalculationMode.INSTANT_CONSERVATIVE;
@@ -255,6 +286,30 @@ public class HerbloreDataService
 		this.playerSkillService.setBoostMode(this.herbloreBoostMode);
 	}
 
+	/**
+	 * Invoked when RuneLite's ConfigChanged event fires. Updates local settings and reschedules
+	 * the central refresh timer only if the refresh interval actually changed — never fires direct API calls.
+	 */
+	public synchronized void onExternalConfigChanged()
+	{
+		int previousInterval = this.refreshIntervalSeconds;
+		PriceCalculationMode previousMode = this.priceCalculationMode;
+		syncSettingsFromConfig();
+
+		if (pluginRunning.get() && this.refreshIntervalSeconds != previousInterval)
+		{
+			rescheduleBackgroundUpdates();
+		}
+		if (pluginRunning.get() && this.priceCalculationMode != previousMode
+			&& (this.priceCalculationMode == PriceCalculationMode.FIVE_MINUTE_AVERAGE
+				|| this.priceCalculationMode == PriceCalculationMode.ONE_HOUR_AVERAGE))
+		{
+			refreshPricesAsync(false);
+		}
+		recalculateAll(currentEpochSeconds());
+		notifyUiListeners();
+	}
+
 	public synchronized void applyRuntimeSettings(
 		int refreshIntervalSec,
 		PriceCalculationMode priceMode,
@@ -270,7 +325,14 @@ public class HerbloreDataService
 		HerbloreBoostMode boostMode,
 		boolean notifications)
 	{
+		int previousInterval = this.refreshIntervalSeconds;
+		PriceCalculationMode previousMode = this.priceCalculationMode;
+
 		this.refreshIntervalSeconds = Math.max(30, refreshIntervalSec);
+		if (this.priceCacheService != null)
+		{
+			this.priceCacheService.setLatestTtlSeconds(this.refreshIntervalSeconds);
+		}
 		this.priceCalculationMode = priceMode != null ? priceMode : PriceCalculationMode.INSTANT_CONSERVATIVE;
 		this.showProfitableOnly = profitableOnly;
 		this.showAvailableAtLevelOnly = availableAtLevelOnly;
@@ -285,8 +347,17 @@ public class HerbloreDataService
 		this.enableNotifications = notifications;
 
 		this.playerSkillService.setBoostMode(this.herbloreBoostMode);
-		rescheduleBackgroundUpdates();
-		recalculateAll(Instant.now().getEpochSecond());
+		if (pluginRunning.get() && this.refreshIntervalSeconds != previousInterval)
+		{
+			rescheduleBackgroundUpdates();
+		}
+		if (pluginRunning.get() && this.priceCalculationMode != previousMode
+			&& (this.priceCalculationMode == PriceCalculationMode.FIVE_MINUTE_AVERAGE
+				|| this.priceCalculationMode == PriceCalculationMode.ONE_HOUR_AVERAGE))
+		{
+			refreshPricesAsync(false);
+		}
+		recalculateAll(currentEpochSeconds());
 		notifyUiListeners();
 	}
 
@@ -296,19 +367,25 @@ public class HerbloreDataService
 	}
 
 	/**
-	 * Starts background price updates and triggers an initial asynchronous fetch.
+	 * Starts background price updates and triggers an initial cache-aware asynchronous check.
 	 */
 	public synchronized void startUp()
 	{
+		pluginRunning.set(true);
+		if (this.priceCacheService != null)
+		{
+			this.priceCacheService.setLatestTtlSeconds(this.refreshIntervalSeconds);
+		}
 		rescheduleBackgroundUpdates();
-		refreshPricesAsync();
+		refreshPricesAsync(false);
 	}
 
 	/**
-	 * Cleanly cancels scheduled tasks when the plugin stops.
+	 * Cleanly cancels scheduled tasks and stops any background refresh work when the plugin shuts down.
 	 */
 	public synchronized void shutDown()
 	{
+		pluginRunning.set(false);
 		if (scheduledRefreshFuture != null)
 		{
 			scheduledRefreshFuture.cancel(false);
@@ -322,6 +399,18 @@ public class HerbloreDataService
 		refreshRunning.set(false);
 	}
 
+	public boolean isPluginRunning()
+	{
+		return pluginRunning.get();
+	}
+
+	public boolean hasActiveScheduledTasks()
+	{
+		boolean refreshActive = scheduledRefreshFuture != null && !scheduledRefreshFuture.isCancelled() && !scheduledRefreshFuture.isDone();
+		boolean retryActive = scheduledRetryFuture != null && !scheduledRetryFuture.isCancelled() && !scheduledRetryFuture.isDone();
+		return refreshActive || retryActive;
+	}
+
 	private synchronized void rescheduleBackgroundUpdates()
 	{
 		if (scheduledRefreshFuture != null)
@@ -329,11 +418,11 @@ public class HerbloreDataService
 			scheduledRefreshFuture.cancel(false);
 			scheduledRefreshFuture = null;
 		}
-		if (executorService != null && !executorService.isShutdown())
+		if (pluginRunning.get() && executorService != null && !executorService.isShutdown())
 		{
 			int delaySec = Math.max(30, refreshIntervalSeconds);
 			scheduledRefreshFuture = executorService.scheduleWithFixedDelay(
-				this::refreshPricesNowSafe,
+				this::refreshPricesScheduledSafe,
 				delaySec,
 				delaySec,
 				TimeUnit.SECONDS
@@ -342,21 +431,53 @@ public class HerbloreDataService
 	}
 
 	/**
-	 * Triggers a non-blocking manual or scheduled price refresh on the background executor.
+	 * Triggers a non-blocking price check on the background executor, respecting cache freshness.
 	 */
 	public void refreshPricesAsync()
 	{
+		refreshPricesAsync(false);
+	}
+
+	public void refreshPricesAsync(boolean forceRefresh)
+	{
 		if (executorService != null && !executorService.isShutdown())
 		{
-			executorService.submit(this::refreshPricesNowSafe);
+			executorService.submit(() -> refreshPricesNowSafe(forceRefresh));
 		}
 	}
 
-	private void refreshPricesNowSafe()
+	/**
+	 * User-initiated manual refresh button handler. Enforces a minimum cooldown and delegates
+	 * to the central scheduler so clicking Refresh repeatedly cannot create uncontrolled API traffic.
+	 */
+	public void manualRefreshAsync()
+	{
+		long nowSec = currentEpochSeconds();
+		if ((nowSec - lastManualRefreshEpochSec) < MIN_MANUAL_REFRESH_COOLDOWN_SEC
+			&& priceCacheService.isLatestCacheFresh(nowSec, MIN_MANUAL_REFRESH_COOLDOWN_SEC))
+		{
+			statusDetailText = "Prices are already up to date (checked " + Math.max(0L, nowSec - lastUpdatedEpochSec) + "s ago)";
+			notifyUiListeners();
+			return;
+		}
+		lastManualRefreshEpochSec = nowSec;
+		refreshPricesAsync(true);
+	}
+
+	private void refreshPricesScheduledSafe()
+	{
+		if (!pluginRunning.get())
+		{
+			return;
+		}
+		refreshPricesNowSafe(false);
+	}
+
+	private void refreshPricesNowSafe(boolean forceRefresh)
 	{
 		try
 		{
-			refreshPricesNow();
+			refreshPricesNow(forceRefresh);
 		}
 		catch (Throwable t)
 		{
@@ -365,57 +486,108 @@ public class HerbloreDataService
 	}
 
 	/**
-	 * Synchronously fetches bulk prices from the OSRS Wiki API, falling back to cached prices on failure.
+	 * Synchronously fetches or validates bulk prices from the OSRS Wiki API via {@link WikiPriceService},
+	 * preserving previously cached prices on failure (stale-while-revalidate).
 	 */
 	public void refreshPricesNow()
+	{
+		refreshPricesNow(false);
+	}
+
+	public void refreshPricesNow(boolean forceRefresh)
 	{
 		if (!refreshRunning.compareAndSet(false, true))
 		{
 			return;
 		}
 
-		connectionState = ConnectionState.REFRESHING;
-		statusDetailText = "Fetching OSRS Wiki real-time prices...";
-		notifyUiListeners();
-
-		long nowSec = Instant.now().getEpochSecond();
+		long nowSec = currentEpochSeconds();
 		try
 		{
-			Map<Integer, ItemPrice> livePrices = wikiPriceService.fetchAllHerblorePrices();
+			// Fast path: if cache is already fresh and not forcing refresh, skip UPDATING flicker and network
+			boolean need5m = (priceCalculationMode == PriceCalculationMode.FIVE_MINUTE_AVERAGE) && !priceCacheService.is5mCacheFresh(nowSec);
+			boolean need1h = (priceCalculationMode == PriceCalculationMode.ONE_HOUR_AVERAGE) && !priceCacheService.is1hCacheFresh(nowSec);
+			if (!forceRefresh && priceCacheService.isLatestCacheFresh(nowSec) && !need5m && !need1h)
+			{
+				Map<Integer, ItemPrice> cached = wikiPriceService.fetchAllHerblorePrices(priceCalculationMode, false);
+				if (cached != null && !cached.isEmpty())
+				{
+					activePrices.putAll(cached);
+					lastUpdatedEpochSec = priceCacheService.getLastLiveSaveEpochSec();
+					connectionState = ConnectionState.CONNECTED;
+					statusDetailText = wikiPriceService.getConnectionStatusMessage();
+				}
+				return;
+			}
+
+			connectionState = ConnectionState.UPDATING;
+			statusDetailText = "Updating OSRS Wiki real-time prices...";
+			notifyUiListeners();
+
+			Map<Integer, ItemPrice> livePrices = wikiPriceService.fetchAllHerblorePrices(priceCalculationMode, forceRefresh);
 			if (livePrices != null && !livePrices.isEmpty())
 			{
-				activePrices.clear();
 				activePrices.putAll(livePrices);
-				lastUpdatedEpochSec = nowSec;
-				connectionState = ConnectionState.LIVE;
+				lastUpdatedEpochSec = priceCacheService.getLastLiveSaveEpochSec() > 0L
+					? priceCacheService.getLastLiveSaveEpochSec()
+					: currentEpochSeconds();
+				connectionState = ConnectionState.CONNECTED;
 				statusDetailText = wikiPriceService.getConnectionStatusMessage();
 			}
 		}
 		catch (Exception ex)
 		{
-			log.debug("[HerbWise] Live API fetch unavailable ({}); using cached fallback.", ex.getMessage());
-			Map<Integer, ItemPrice> fallback = priceCacheService.getOrLoadFallbackPrices();
-			if (!fallback.isEmpty())
+			log.debug("[HerbWise] Live API fetch unavailable ({}); preserving cached prices.", ex.getMessage());
+
+			// Preserve existing valid live prices in activePrices; only load fallback snapshot if empty
+			Map<Integer, ItemPrice> cached = priceCacheService.getCurrentCachedPrices();
+			if (!cached.isEmpty())
 			{
-				activePrices.clear();
-				activePrices.putAll(fallback);
-				connectionState = ConnectionState.CACHED_FALLBACK;
-				lastUpdatedEpochSec = priceCacheService.getLastLiveSaveEpochSec() > 0
-					? priceCacheService.getLastLiveSaveEpochSec()
-					: PriceCacheService.BUNDLED_SNAPSHOT_EPOCH_SEC;
-				statusDetailText = "Using cached price snapshot (Live API unreachable)";
+				activePrices.putAll(cached);
+			}
+			else if (activePrices.isEmpty())
+			{
+				activePrices.putAll(priceCacheService.getOrLoadFallbackPrices());
+			}
+
+			if (priceCacheService.getLastLiveSaveEpochSec() > 0L)
+			{
+				lastUpdatedEpochSec = priceCacheService.getLastLiveSaveEpochSec();
+			}
+			else if (lastUpdatedEpochSec <= 0L)
+			{
+				lastUpdatedEpochSec = PriceCacheService.BUNDLED_SNAPSHOT_EPOCH_SEC;
+			}
+
+			if (wikiPriceService != null && wikiPriceService.isRateLimited())
+			{
+				connectionState = ConnectionState.RATE_LIMITED;
+				long waitSec = wikiPriceService.getRemainingCooldownSeconds();
+				statusDetailText = "Rate Limited (HTTP 429) — Retry in " + waitSec + "s (Using Cached Data)";
+				scheduleSingleDelayedRetry(waitSec);
+			}
+			else if (wikiPriceService != null && wikiPriceService.isCircuitBreakerOpen())
+			{
+				connectionState = ConnectionState.OFFLINE;
+				long waitSec = wikiPriceService.getRemainingCooldownSeconds();
+				statusDetailText = "Offline (Circuit Breaker Cooldown " + waitSec + "s) — Using Cached Data";
+			}
+			else if (!priceCacheService.isUsingFallbackSnapshot() && priceCacheService.getLastLiveSaveEpochSec() > 0L)
+			{
+				connectionState = ConnectionState.CACHED_DATA;
+				statusDetailText = "Using cached prices (" + ex.getMessage() + ")";
 			}
 			else
 			{
-				connectionState = ConnectionState.ERROR;
-				statusDetailText = "API Error: " + ex.getMessage();
+				connectionState = ConnectionState.OFFLINE;
+				statusDetailText = "API Offline — Using bundled fallback cache";
 			}
 		}
 		finally
 		{
 			try
 			{
-				recalculateAll(nowSec);
+				recalculateAll(currentEpochSeconds());
 				checkHighProfitNotifications();
 			}
 			finally
@@ -424,6 +596,24 @@ public class HerbloreDataService
 				notifyUiListeners();
 			}
 		}
+	}
+
+	private synchronized void scheduleSingleDelayedRetry(long delaySeconds)
+	{
+		if (!pluginRunning.get() || executorService == null || executorService.isShutdown())
+		{
+			return;
+		}
+		if (scheduledRetryFuture != null && !scheduledRetryFuture.isDone())
+		{
+			return;
+		}
+		long safeDelay = Math.max(1L, delaySeconds);
+		scheduledRetryFuture = executorService.schedule(
+			this::refreshPricesScheduledSafe,
+			safeDelay,
+			TimeUnit.SECONDS
+		);
 	}
 
 	/**
@@ -769,12 +959,29 @@ public class HerbloreDataService
 		{
 			return "Never";
 		}
-		long ageSec = Math.max(0L, Instant.now().getEpochSecond() - lastUpdatedEpochSec);
-		if (connectionState == ConnectionState.CACHED_FALLBACK)
+		long ageSec = getCacheAgeSeconds();
+		if (priceCacheService != null && priceCacheService.isUsingFallbackSnapshot())
 		{
-			return "Cached Snapshot (" + formatAgeShort(ageSec) + " old)";
+			return "Offline Snapshot (" + formatAgeShort(ageSec) + " old)";
 		}
 		return TIME_FMT.format(Instant.ofEpochSecond(lastUpdatedEpochSec)) + " (" + formatAgeShort(ageSec) + " ago)";
+	}
+
+	public long getCacheAgeSeconds()
+	{
+		if (lastUpdatedEpochSec <= 0L)
+		{
+			return 0L;
+		}
+		return Math.max(0L, currentEpochSeconds() - lastUpdatedEpochSec);
+	}
+
+	public String getCompactApiStatusSummary()
+	{
+		int cachedCount = priceCacheService != null ? priceCacheService.getCachedItemCount() : activePrices.size();
+		boolean isLive = connectionState == ConnectionState.CONNECTED || connectionState == ConnectionState.LIVE;
+		String sourceTag = isLive ? "Live" : "Cached";
+		return sourceTag + " • " + cachedCount + " items • Updated " + getFormattedLastUpdated();
 	}
 
 	public static String formatAgeShort(long seconds)
@@ -798,9 +1005,17 @@ public class HerbloreDataService
 
 	public void addUiUpdateListener(Runnable listener)
 	{
-		if (listener != null)
+		if (listener != null && !uiUpdateListeners.contains(listener))
 		{
 			uiUpdateListeners.add(listener);
+		}
+	}
+
+	public void removeUiUpdateListener(Runnable listener)
+	{
+		if (listener != null)
+		{
+			uiUpdateListeners.remove(listener);
 		}
 	}
 

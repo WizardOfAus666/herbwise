@@ -940,6 +940,29 @@ public final class HerbloreRecipes
 			))
 			.build());
 
+		// 3-dose variant from clean herb + vial of water + secondary
+		list.add(PotionRecipe.builder()
+			.recipeId(baseKey + "_3_herb")
+			.familyName(familyName)
+			.potionName(familyName + "(3) (From Herb)")
+			.potionItemId(id3)
+			.doses(3)
+			.requiredLevel(level)
+			.xpGained(xp)
+			.unfinishedPotionId(unfId)
+			.unfinishedPotionName(unfName)
+			.secondarySummary(herbName + " + Vial + " + secName)
+			.category(category)
+			.alternativeRecipe(true)
+			.potionsPerHourEstimate(1200)
+			.preparationNotes("Direct 3-dose creation starting from clean " + herbName + " + Vial of water + " + secName + ".")
+			.ingredients(Arrays.asList(
+				new PotionIngredient(herbId, herbName, 1, true, "Clean Herb"),
+				new PotionIngredient(ItemID.VIAL_OF_WATER, "Vial of water", 1, true, "Liquid Base"),
+				new PotionIngredient(secId, secName, secQty, true, "Secondary Ingredient")
+			))
+			.build());
+
 		// 2-dose variant (separate tradable ItemID)
 		if (id2 > 0)
 		{
@@ -960,6 +983,28 @@ public final class HerbloreRecipes
 				.preparationNotes("2-dose tradable variant of " + familyName + ".")
 				.ingredients(Arrays.asList(
 					new PotionIngredient(unfId, unfName, 1, true, "Unfinished Base"),
+					new PotionIngredient(secId, secName, secQty, true, "Secondary Ingredient")
+				))
+				.build());
+
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_2_herb")
+				.familyName(familyName)
+				.potionName(familyName + "(2) (From Herb)")
+				.potionItemId(id2)
+				.doses(2)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(unfId)
+				.unfinishedPotionName(unfName)
+				.secondarySummary(herbName + " + Vial + " + secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(1200)
+				.preparationNotes("2-dose tradable variant of " + familyName + " prepared from clean " + herbName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(herbId, herbName, 1, true, "Clean Herb"),
+					new PotionIngredient(ItemID.VIAL_OF_WATER, "Vial of water", 1, true, "Liquid Base"),
 					new PotionIngredient(secId, secName, secQty, true, "Secondary Ingredient")
 				))
 				.build());
@@ -985,6 +1030,28 @@ public final class HerbloreRecipes
 				.preparationNotes("1-dose tradable variant of " + familyName + ".")
 				.ingredients(Arrays.asList(
 					new PotionIngredient(unfId, unfName, 1, true, "Unfinished Base"),
+					new PotionIngredient(secId, secName, secQty, true, "Secondary Ingredient")
+				))
+				.build());
+
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_1_herb")
+				.familyName(familyName)
+				.potionName(familyName + "(1) (From Herb)")
+				.potionItemId(id1)
+				.doses(1)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(unfId)
+				.unfinishedPotionName(unfName)
+				.secondarySummary(herbName + " + Vial + " + secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(1200)
+				.preparationNotes("1-dose tradable variant of " + familyName + " prepared from clean " + herbName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(herbId, herbName, 1, true, "Clean Herb"),
+					new PotionIngredient(ItemID.VIAL_OF_WATER, "Vial of water", 1, true, "Liquid Base"),
 					new PotionIngredient(secId, secName, secQty, true, "Secondary Ingredient")
 				))
 				.build());
@@ -1136,6 +1203,120 @@ public final class HerbloreRecipes
 				new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
 			))
 			.build());
+
+		list.add(PotionRecipe.builder()
+			.recipeId(baseKey + "_3_coconut")
+			.familyName(familyName)
+			.potionName(familyName + "(3) (From Coconut Milk)")
+			.potionItemId(id3)
+			.doses(3)
+			.requiredLevel(level)
+			.xpGained(xp)
+			.unfinishedPotionId(unfId)
+			.unfinishedPotionName(unfName)
+			.secondarySummary("Coconut milk + " + herbName + " + " + secName)
+			.category(category)
+			.alternativeRecipe(true)
+			.potionsPerHourEstimate(1200)
+			.preparationNotes("3-dose variant of " + familyName + " using Coconut milk + " + herbName + " + " + secName + ".")
+			.ingredients(Arrays.asList(
+				new PotionIngredient(ItemID.COCONUT_MILK, "Coconut milk", 1, true, "Liquid Base"),
+				new PotionIngredient(herbId, herbName, 1, true, "Clean Herb"),
+				new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+			))
+			.build());
+
+		if (id2 > 0)
+		{
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_2_unf")
+				.familyName(familyName)
+				.potionName(familyName + "(2)")
+				.potionItemId(id2)
+				.doses(2)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(unfId)
+				.unfinishedPotionName(unfName)
+				.secondarySummary(secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(2500)
+				.preparationNotes("2-dose variant of " + familyName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(unfId, unfName, 1, true, "Unfinished Base"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_2_coconut")
+				.familyName(familyName)
+				.potionName(familyName + "(2) (From Coconut Milk)")
+				.potionItemId(id2)
+				.doses(2)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(unfId)
+				.unfinishedPotionName(unfName)
+				.secondarySummary("Coconut milk + " + herbName + " + " + secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(1200)
+				.preparationNotes("2-dose variant of " + familyName + " using Coconut milk + " + herbName + " + " + secName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(ItemID.COCONUT_MILK, "Coconut milk", 1, true, "Liquid Base"),
+					new PotionIngredient(herbId, herbName, 1, true, "Clean Herb"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+		}
+
+		if (id1 > 0)
+		{
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_1_unf")
+				.familyName(familyName)
+				.potionName(familyName + "(1)")
+				.potionItemId(id1)
+				.doses(1)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(unfId)
+				.unfinishedPotionName(unfName)
+				.secondarySummary(secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(2500)
+				.preparationNotes("1-dose variant of " + familyName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(unfId, unfName, 1, true, "Unfinished Base"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_1_coconut")
+				.familyName(familyName)
+				.potionName(familyName + "(1) (From Coconut Milk)")
+				.potionItemId(id1)
+				.doses(1)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(unfId)
+				.unfinishedPotionName(unfName)
+				.secondarySummary("Coconut milk + " + herbName + " + " + secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(1200)
+				.preparationNotes("1-dose variant of " + familyName + " using Coconut milk + " + herbName + " + " + secName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(ItemID.COCONUT_MILK, "Coconut milk", 1, true, "Liquid Base"),
+					new PotionIngredient(herbId, herbName, 1, true, "Clean Herb"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+		}
 	}
 
 	private static void addBloodPotionFamily(
@@ -1215,6 +1396,120 @@ public final class HerbloreRecipes
 				new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
 			))
 			.build());
+
+		list.add(PotionRecipe.builder()
+			.recipeId(baseKey + "_3_scratch")
+			.familyName(familyName)
+			.potionName(familyName + "(3) (From Vial of Blood)")
+			.potionItemId(id3)
+			.doses(3)
+			.requiredLevel(level)
+			.xpGained(xp)
+			.unfinishedPotionId(ItemID.CADANTINE_BLOOD_POTION_UNF)
+			.unfinishedPotionName("Cadantine blood potion (unf)")
+			.secondarySummary("Vial of blood + Cadantine + " + secName)
+			.category(category)
+			.alternativeRecipe(true)
+			.potionsPerHourEstimate(1200)
+			.preparationNotes("3-dose variant of " + familyName + " using Vial of blood + Cadantine + " + secName + ".")
+			.ingredients(Arrays.asList(
+				new PotionIngredient(ItemID.VIAL_OF_BLOOD, "Vial of blood", 1, true, "Liquid Base"),
+				new PotionIngredient(ItemID.CADANTINE, "Cadantine", 1, true, "Clean Herb"),
+				new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+			))
+			.build());
+
+		if (id2 > 0)
+		{
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_2_unf")
+				.familyName(familyName)
+				.potionName(familyName + "(2)")
+				.potionItemId(id2)
+				.doses(2)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(ItemID.CADANTINE_BLOOD_POTION_UNF)
+				.unfinishedPotionName("Cadantine blood potion (unf)")
+				.secondarySummary(secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(2500)
+				.preparationNotes("2-dose variant of " + familyName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(ItemID.CADANTINE_BLOOD_POTION_UNF, "Cadantine blood potion (unf)", 1, true, "Unfinished Base"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_2_scratch")
+				.familyName(familyName)
+				.potionName(familyName + "(2) (From Vial of Blood)")
+				.potionItemId(id2)
+				.doses(2)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(ItemID.CADANTINE_BLOOD_POTION_UNF)
+				.unfinishedPotionName("Cadantine blood potion (unf)")
+				.secondarySummary("Vial of blood + Cadantine + " + secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(1200)
+				.preparationNotes("2-dose variant of " + familyName + " using Vial of blood + Cadantine + " + secName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(ItemID.VIAL_OF_BLOOD, "Vial of blood", 1, true, "Liquid Base"),
+					new PotionIngredient(ItemID.CADANTINE, "Cadantine", 1, true, "Clean Herb"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+		}
+
+		if (id1 > 0)
+		{
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_1_unf")
+				.familyName(familyName)
+				.potionName(familyName + "(1)")
+				.potionItemId(id1)
+				.doses(1)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(ItemID.CADANTINE_BLOOD_POTION_UNF)
+				.unfinishedPotionName("Cadantine blood potion (unf)")
+				.secondarySummary(secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(2500)
+				.preparationNotes("1-dose variant of " + familyName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(ItemID.CADANTINE_BLOOD_POTION_UNF, "Cadantine blood potion (unf)", 1, true, "Unfinished Base"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+
+			list.add(PotionRecipe.builder()
+				.recipeId(baseKey + "_1_scratch")
+				.familyName(familyName)
+				.potionName(familyName + "(1) (From Vial of Blood)")
+				.potionItemId(id1)
+				.doses(1)
+				.requiredLevel(level)
+				.xpGained(xp)
+				.unfinishedPotionId(ItemID.CADANTINE_BLOOD_POTION_UNF)
+				.unfinishedPotionName("Cadantine blood potion (unf)")
+				.secondarySummary("Vial of blood + Cadantine + " + secName)
+				.category(category)
+				.alternativeRecipe(true)
+				.potionsPerHourEstimate(1200)
+				.preparationNotes("1-dose variant of " + familyName + " using Vial of blood + Cadantine + " + secName + ".")
+				.ingredients(Arrays.asList(
+					new PotionIngredient(ItemID.VIAL_OF_BLOOD, "Vial of blood", 1, true, "Liquid Base"),
+					new PotionIngredient(ItemID.CADANTINE, "Cadantine", 1, true, "Clean Herb"),
+					new PotionIngredient(secId, secName, 1, true, "Secondary Ingredient")
+				))
+				.build());
+		}
 	}
 
 	private static void addStackableUpgradeFamily(

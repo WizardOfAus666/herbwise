@@ -45,6 +45,7 @@ public class HerbWisePanel extends PluginPanel
 	public static final int DEFAULT_WIDE_PANEL_HEIGHT = 820;
 
 	private final HerbloreDataService dataService;
+	private final Runnable uiListenerRef = this::refreshAllTabs;
 	private javax.swing.JFrame popoutFrame;
 
 	// Header status widgets
@@ -121,11 +122,11 @@ public class HerbWisePanel extends PluginPanel
 		titleRow.add(brandLeft, BorderLayout.CENTER);
 
 		manualRefreshButton = new HerbButton("↻ Refresh");
-		manualRefreshButton.setToolTipText("Fetch latest real-time OSRS Wiki prices now");
+		manualRefreshButton.setToolTipText("Request a price refresh via the central rate-limited scheduler");
 		manualRefreshButton.addActionListener(e -> {
 			if (dataService != null)
 			{
-				dataService.refreshPricesAsync();
+				dataService.manualRefreshAsync();
 			}
 		});
 
@@ -240,12 +241,20 @@ public class HerbWisePanel extends PluginPanel
 
 		if (this.dataService != null)
 		{
-			this.dataService.addUiUpdateListener(this::refreshAllTabs);
+			this.dataService.addUiUpdateListener(uiListenerRef);
 		}
 
 		switchTab(TAB_DASHBOARD);
 		refreshHeaderStatus();
 		HerbWiseTheme.normalizeBoxAlignment(this);
+	}
+
+	public void disposePanelListeners()
+	{
+		if (this.dataService != null)
+		{
+			this.dataService.removeUiUpdateListener(uiListenerRef);
+		}
 	}
 
 	public void switchTab(String tabKey)
@@ -308,9 +317,10 @@ public class HerbWisePanel extends PluginPanel
 		statusBadgeLabel.setForeground(state.getBadgeColor());
 		statusBadgeLabel.setToolTipText(dataService.getStatusDetailText());
 
-		lastUpdatedLabel.setText("Updated: " + dataService.getFormattedLastUpdated());
+		lastUpdatedLabel.setText(dataService.getCompactApiStatusSummary());
+		lastUpdatedLabel.setToolTipText(dataService.getStatusDetailText());
 		manualRefreshButton.setEnabled(!dataService.isRefreshRunning());
-		manualRefreshButton.setText(dataService.isRefreshRunning() ? "Fetching..." : "↻ Refresh");
+		manualRefreshButton.setText(dataService.isRefreshRunning() ? "Updating..." : "↻ Refresh");
 	}
 
 	/**
@@ -341,6 +351,14 @@ public class HerbWisePanel extends PluginPanel
 		HerbWisePanel widePanel = new HerbWisePanel(dataService);
 		popoutFrame = new javax.swing.JFrame("HerbWise — OSRS Herblore Profit & Training Assistant");
 		popoutFrame.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+		popoutFrame.addWindowListener(new java.awt.event.WindowAdapter()
+		{
+			@Override
+			public void windowClosed(java.awt.event.WindowEvent e)
+			{
+				widePanel.disposePanelListeners();
+			}
+		});
 		popoutFrame.setIconImage(HerbWiseTheme.createHeaderIcon());
 		popoutFrame.getContentPane().setBackground(HerbWiseTheme.BG_MATTE_BLACK);
 		popoutFrame.getContentPane().setLayout(new BorderLayout());

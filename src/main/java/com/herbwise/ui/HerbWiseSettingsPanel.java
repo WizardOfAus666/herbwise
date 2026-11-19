@@ -48,6 +48,8 @@ public class HerbWiseSettingsPanel extends JPanel
 	private final JComboBox<HerbloreBoostMode> boostModeCombo;
 
 	private final JLabel diagStatusLabel;
+	private final JLabel diagCacheMetricsLabel;
+	private final JLabel diagTrafficMetricsLabel;
 	private final JLabel diagRecipeCountLabel;
 
 	private boolean suppressEvents = false;
@@ -84,7 +86,7 @@ public class HerbWiseSettingsPanel extends JPanel
 		intLbl.setForeground(HerbWiseTheme.TEXT_SECONDARY);
 		intervalRow.add(intLbl, BorderLayout.CENTER);
 
-		refreshIntervalSpinner = new JSpinner(new SpinnerNumberModel(60, 30, 3600, 15));
+		refreshIntervalSpinner = new JSpinner(new SpinnerNumberModel(120, 30, 3600, 15));
 		refreshIntervalSpinner.setFont(HerbWiseTheme.getSmallFont());
 		refreshIntervalSpinner.addChangeListener(e -> applySettings());
 		intervalRow.add(refreshIntervalSpinner, BorderLayout.EAST);
@@ -258,6 +260,21 @@ public class HerbWiseSettingsPanel extends JPanel
 		diagStatusLabel.setForeground(HerbWiseTheme.TEXT_SECONDARY);
 		diagStatusLabel.setAlignmentX(LEFT_ALIGNMENT);
 		diagCard.add(diagStatusLabel);
+		diagCard.add(Box.createRigidArea(new Dimension(0, 2)));
+
+		diagCacheMetricsLabel = new JLabel("Cache: —");
+		diagCacheMetricsLabel.setFont(HerbWiseTheme.getSmallFont());
+		diagCacheMetricsLabel.setForeground(HerbWiseTheme.TEXT_SECONDARY);
+		diagCacheMetricsLabel.setAlignmentX(LEFT_ALIGNMENT);
+		diagCard.add(diagCacheMetricsLabel);
+		diagCard.add(Box.createRigidArea(new Dimension(0, 2)));
+
+		diagTrafficMetricsLabel = new JLabel("Traffic: —");
+		diagTrafficMetricsLabel.setFont(HerbWiseTheme.getSmallFont());
+		diagTrafficMetricsLabel.setForeground(HerbWiseTheme.COLOR_INFO_CYAN);
+		diagTrafficMetricsLabel.setAlignmentX(LEFT_ALIGNMENT);
+		diagCard.add(diagTrafficMetricsLabel);
+		diagCard.add(Box.createRigidArea(new Dimension(0, 2)));
 
 		diagRecipeCountLabel = new JLabel("Verified Recipes: —");
 		diagRecipeCountLabel.setFont(HerbWiseTheme.getSmallFont());
@@ -322,10 +339,36 @@ public class HerbWiseSettingsPanel extends JPanel
 			boostModeCombo.setSelectedItem(dataService.getHerbloreBoostMode());
 
 			diagStatusLabel.setText("<html><body style='width:380px'><b>API Status:</b> "
+				+ dataService.getConnectionState().getBadgeText() + " — "
 				+ dataService.getStatusDetailText() + "</body></html>");
+
+			int cachedCount = dataService.getPriceCacheService() != null
+				? dataService.getPriceCacheService().getCachedItemCount()
+				: 0;
+			long cacheAge = dataService.getCacheAgeSeconds();
+			diagCacheMetricsLabel.setText("<html><body style='width:380px'><b>Cache:</b> "
+				+ cachedCount + " items • Age: " + HerbloreDataService.formatAgeShort(cacheAge)
+				+ " • Last Update: " + dataService.getFormattedLastUpdated() + "</body></html>");
+
+			if (dataService.getWikiPriceService() != null)
+			{
+				WikiPriceService.ApiDiagnostics diag = dataService.getWikiPriceService().getDiagnostics();
+				diagTrafficMetricsLabel.setText("<html><body style='width:380px'><b>API Diagnostics:</b> "
+					+ "Requests: " + diag.getTotalApiRequests()
+					+ " (/latest: " + diag.getRequestsByEndpoint().getOrDefault("/latest", 0L)
+					+ ", /5m: " + diag.getRequestsByEndpoint().getOrDefault("/5m", 0L)
+					+ ", /1h: " + diag.getRequestsByEndpoint().getOrDefault("/1h", 0L)
+					+ ", /timeseries: " + diag.getRequestsByEndpoint().getOrDefault("/timeseries", 0L) + ")"
+					+ " • Hits: " + diag.getCacheHits()
+					+ " • Deduped: " + diag.getDeduplicatedRequests()
+					+ " • 429s: " + diag.getHttp429Responses()
+					+ " • Avg: " + diag.getAverageResponseTimeMs() + "ms</body></html>");
+			}
+
 			diagRecipeCountLabel.setText("Verified Recipes: "
 				+ dataService.getWikiRecipeService().getAllVerifiedRecipes().size()
-				+ " (0 Invalid / 100% Verified)");
+				+ " (" + dataService.getWikiRecipeService().getRequiredUniqueItemIds().size()
+				+ " Unique Item IDs • 100% Verified)");
 		}
 		finally
 		{
@@ -372,7 +415,7 @@ public class HerbWiseSettingsPanel extends JPanel
 		suppressEvents = true;
 		try
 		{
-			refreshIntervalSpinner.setValue(60);
+			refreshIntervalSpinner.setValue(120);
 			priceModeCombo.setSelectedItem(PriceCalculationMode.INSTANT_CONSERVATIVE);
 			updatePriceExplanationText();
 			includeGeTaxCheck.setSelected(true);

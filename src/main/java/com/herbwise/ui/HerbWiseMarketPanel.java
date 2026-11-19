@@ -112,7 +112,7 @@ public class HerbWiseMarketPanel extends JPanel
 		itemSelectorCombo.addActionListener(e -> {
 			if (!suppressComboEvents)
 			{
-				updateSelectedItemAnalysis();
+				updateSelectedItemAnalysis(true);
 			}
 		});
 		controlCard.add(itemSelectorCombo);
@@ -132,13 +132,13 @@ public class HerbWiseMarketPanel extends JPanel
 		timestepCombo.addActionListener(e -> {
 			if (!suppressComboEvents)
 			{
-				updateSelectedItemAnalysis();
+				updateSelectedItemAnalysis(true);
 			}
 		});
 		stepRow.add(timestepCombo, BorderLayout.CENTER);
 
 		HerbButton fetchBtn = new HerbButton("Refresh", true);
-		fetchBtn.addActionListener(e -> updateSelectedItemAnalysis());
+		fetchBtn.addActionListener(e -> updateSelectedItemAnalysis(true));
 		stepRow.add(fetchBtn, BorderLayout.EAST);
 
 		controlCard.add(stepRow);
@@ -301,24 +301,37 @@ public class HerbWiseMarketPanel extends JPanel
 
 	public void selectItem(int itemId)
 	{
-		for (int i = 0; i < itemSelectorCombo.getItemCount(); i++)
+		suppressComboEvents = true;
+		try
 		{
-			MarketItemChoice c = itemSelectorCombo.getItemAt(i);
-			if (c != null && c.itemId == itemId)
+			for (int i = 0; i < itemSelectorCombo.getItemCount(); i++)
 			{
-				itemSelectorCombo.setSelectedIndex(i);
-				break;
+				MarketItemChoice c = itemSelectorCombo.getItemAt(i);
+				if (c != null && c.itemId == itemId)
+				{
+					itemSelectorCombo.setSelectedIndex(i);
+					break;
+				}
 			}
 		}
-		updateSelectedItemAnalysis();
+		finally
+		{
+			suppressComboEvents = false;
+		}
+		updateSelectedItemAnalysis(true);
 	}
 
+	/**
+	 * Updates the Market panel from existing in-memory cached prices without triggering
+	 * any network requests. Network {@code /timeseries} requests only occur when the user
+	 * explicitly selects or refreshes an item in the Market tab.
+	 */
 	public void refresh()
 	{
-		updateSelectedItemAnalysis();
+		updateSelectedItemAnalysis(false);
 	}
 
-	private void updateSelectedItemAnalysis()
+	private void updateSelectedItemAnalysis(boolean allowNetworkFetchIfExpired)
 	{
 		if (dataService == null)
 		{
@@ -373,9 +386,18 @@ public class HerbWiseMarketPanel extends JPanel
 			priceAgeLabel.setText(HerbloreDataService.formatAgeShort(ageSec)
 				+ (itemPrice.isFromCache() ? " (Cached)" : " ago"));
 
-			// Render immediate local snapshot analysis while asynchronous timeseries fetch runs
-			MarketTrendAnalysis fallbackAnalysis = buildLocalSnapshotTrend(itemPrice, timestep);
-			applyTrendAnalysisToUi(fallbackAnalysis);
+			MarketTrendAnalysis cachedAnalysis = dataService.getPriceCacheService() != null
+				? dataService.getPriceCacheService().getCachedTrendAnalysis(itemId, timestep)
+				: null;
+			if (cachedAnalysis != null && !cachedAnalysis.getPoints().isEmpty())
+			{
+				applyTrendAnalysisToUi(cachedAnalysis);
+			}
+			else
+			{
+				MarketTrendAnalysis fallbackAnalysis = buildLocalSnapshotTrend(itemPrice, timestep);
+				applyTrendAnalysisToUi(fallbackAnalysis);
+			}
 		}
 		else
 		{
@@ -389,7 +411,12 @@ public class HerbWiseMarketPanel extends JPanel
 			priceAgeLabel.setText("Unavailable");
 		}
 
-		// Trigger non-blocking /timeseries API lookup
+		if (!allowNetworkFetchIfExpired)
+		{
+			return;
+		}
+
+		// Trigger non-blocking /timeseries API lookup only on explicit user action (and WikiPriceService caches it)
 		final ItemPrice snapshotPrice = itemPrice;
 		final String safeStep = timestep;
 		dataService.fetchTimeseriesAsync(

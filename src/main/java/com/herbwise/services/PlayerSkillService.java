@@ -51,6 +51,7 @@ public class PlayerSkillService
 	 */
 	public synchronized PlayerHerbloreData refreshFromClient()
 	{
+		PlayerHerbloreData previous = this.currentSnapshot;
 		if (client != null && client.getGameState() == GameState.LOGGED_IN)
 		{
 			try
@@ -70,8 +71,12 @@ public class PlayerSkillService
 					playerName = Text.sanitize(local.getName());
 				}
 
-				currentSnapshot = buildSnapshot(true, playerName, realLevel, boostedLevel, xp, false);
-				notifyListeners(currentSnapshot);
+				PlayerHerbloreData next = buildSnapshot(true, playerName, realLevel, boostedLevel, xp, false);
+				currentSnapshot = next;
+				if (hasMeaningfulChange(previous, next))
+				{
+					notifyListeners(next);
+				}
 				return currentSnapshot;
 			}
 			catch (Throwable ignored)
@@ -80,7 +85,7 @@ public class PlayerSkillService
 			}
 		}
 
-		currentSnapshot = buildSnapshot(
+		PlayerHerbloreData next = buildSnapshot(
 			false,
 			"Preview / Offline Session",
 			fallbackManualLevel,
@@ -88,8 +93,26 @@ public class PlayerSkillService
 			fallbackManualXp,
 			true
 		);
-		notifyListeners(currentSnapshot);
+		currentSnapshot = next;
+		if (hasMeaningfulChange(previous, next))
+		{
+			notifyListeners(next);
+		}
 		return currentSnapshot;
+	}
+
+	private static boolean hasMeaningfulChange(PlayerHerbloreData prev, PlayerHerbloreData next)
+	{
+		if (prev == null || next == null)
+		{
+			return true;
+		}
+		return prev.isLoggedIn() != next.isLoggedIn()
+			|| prev.getCurrentLevel() != next.getCurrentLevel()
+			|| prev.getBoostedLevel() != next.getBoostedLevel()
+			|| prev.getCurrentXp() != next.getCurrentXp()
+			|| prev.getAppliedBoostLevels() != next.getAppliedBoostLevels()
+			|| prev.isManualOverride() != next.isManualOverride();
 	}
 
 	/**
